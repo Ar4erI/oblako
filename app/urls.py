@@ -2,8 +2,9 @@ from flask import request, jsonify, url_for, redirect, session
 from flask_login import login_user, login_required, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from app.models import Product, User, product_schema, products_schema, user_schema, ProductCart, product_cart_schema, products_cart_schema
+from app.models import Product, User, product_schema, products_schema, OrderedProduct, Order
 from app import app, db
+
 
 # Routs
 @app.route('/<category>', methods=['GET', 'POST'])
@@ -46,6 +47,7 @@ def product_for_category(category):
 
     return jsonify(result)
 
+
 @app.route('/product', methods=['POST', 'GET'])
 def all_products():
     if request.method == 'POST':
@@ -67,7 +69,6 @@ def all_products():
         result = products_schema.dump(all_products)
 
         return jsonify(result)
-
 
 
 # Get Single Products
@@ -103,13 +104,99 @@ def get_product(id):
 
         return product_schema.jsonify(product)
 
+
 @app.route('/product/<id>/buy', methods=['POST', 'DELETE'])
 def buy_product(id):
-    pass
+    if request.method == 'POST':
+        session.permanent = True
+        qty = request.json['qty']
+        buyed_products = []
+
+        if 'buyed_products' not in session:
+            session['buyed_products'] = buyed_products
+            product_in_cart = {id: qty}
+            session['buyed_products'].append(product_in_cart)
+            session.modified = True
+        else:
+            product_in_cart = {id: qty}
+            session['buyed_products'].append(product_in_cart)
+            session.modified = True
+    return {'msg': 'Добавлено в корзину!'}
+
 
 @app.route('/product/cart')
 def products_in_cart():
-    pass
+    if 'buyed_products' not in session:
+        return {'msg': 'В корзине пока ничего нет!'}
+    else:
+        products = []
+        total = 0
+        for n in session['buyed_products']:
+            for id, qty in n.items():
+                p = Product.query.get(id)
+                product = {'id': id, 'manufacturer': p.manufacturer, 'name': p.name, 'description': p.description,
+                           'price': p.price, 'qty': qty, 'category_id': p.category_id}
+                products.append(product)
+                total += p.price * qty
+        totaly = {'total': total}
+        products.append(totaly)
+        return jsonify(products)
+
+
+@app.route('/product/cart/order', methods=['POST'])
+def order_products_from_cart():
+    phone = request.json['phone']
+    customer_name = request.json['customer_name']
+    second_name = request.json['second_name']
+    adress = request.json['adress']
+    email = request.json['email']
+    delivery_type = request.json['delivery_type']
+    pay_type = request.json['pay_type']
+
+    if not User.query.filter_by(phone=phone).first():
+        new_info = User(phone=phone, name=customer_name, second_name=second_name, adress=adress, email=email,
+                        delivery_type=delivery_type, pay_type=pay_type, orders=[])
+        db.session.add(new_info)
+        db.session.commit()
+    else:
+        pass
+    if session['buyed_products'].__len__() > 0:
+        u = User.query.filter_by(phone=phone).first()
+        o = Order(user_id=u.id, products=[])
+        db.session.add(o)
+        db.session.commit()
+        order = Order.query.filter_by(user_id=u.id).order_by(Order.id.desc()).first()
+
+        for n in session['buyed_products']:
+            for id, qty in n.items():
+                product = Product.query.get(id)
+                op = OrderedProduct(link_id=id, name=product.name, price=product.price, qty=qty, order_id=order.id)
+                db.session.add(op)
+                db.session.commit()
+        session['buyed_products'] = []
+
+        products_ = []
+        total_ = 0
+        for p in order.products:
+            total_ += p.price * p.qty
+            product = {'id': p.id, 'name': p.name, 'link_id': p.link_id, 'price': p.price, 'qty': p.qty}
+            products_.append(product)
+        order.total = total_
+        db.session.commit()
+        order_ = {'order_id': order.id, 'status': order.status, 'user_id': order.user_id, 'date': order.date,
+                  'total': order.total}
+        products_.insert(0, order_)
+        return jsonify(products_)
+
+    else:
+        return {'msg': 'Вы не можете сделать пустой заказ!'}
+
+
+'''@app.route('/product/orders')
+def all_orders():
+    all_products = OrderedProduct.query.all()
+
+    return ordered_products_schema.jsonify(all_products)
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -139,4 +226,4 @@ def login():
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('all_products'))
+    return redirect(url_for('all_products'))'''
