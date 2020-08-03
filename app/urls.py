@@ -1,9 +1,9 @@
-from flask import request, jsonify, url_for, redirect, session
-from flask_login import login_user, login_required, logout_user
-from werkzeug.security import check_password_hash, generate_password_hash
+from flask import request, jsonify, session, redirect, url_for
 
-from app.models import Product, User, product_schema, products_schema, OrderedProduct, Order
+from app.models import Product, product_schema, products_schema, OrderedProduct, Order
 from app import app, db
+
+from users.models import User
 
 
 # Routs
@@ -57,12 +57,17 @@ def all_products():
         price = request.json['price']
         category_id = request.json['category_id']
 
-        new_product = Product(manufacturer, name, description, price, category_id)
+        try:
+            new_product = Product(manufacturer, name, description, price, category_id)
 
-        db.session.add(new_product)
-        db.session.commit()
+            db.session.add(new_product)
+            db.session.flush()
+            db.session.commit()
 
-        return product_schema.jsonify(new_product)
+            return product_schema.jsonify(new_product)
+        except:
+            db.session.rollback()
+            return {'msg': 'Ошибка добавления в Базу данных'}
 
     elif request.method == 'GET':
         all_products = Product.query.all()
@@ -75,11 +80,11 @@ def all_products():
 @app.route('/product/<id>', methods=['GET', 'PUT', 'DELETE'])
 def get_product(id):
     if request.method == 'GET':
-        product = Product.query.get(id)
+        product = Product.query.get_or_404(id)
         return product_schema.jsonify(product)
 
     elif request.method == 'PUT':
-        product = Product.query.get(id)
+        product = Product.query.get_or_404(id)
 
         manufacturer = request.json['manufacturer']
         name = request.json['name']
@@ -87,60 +92,95 @@ def get_product(id):
         price = request.json['price']
         category_id = request.json['category_id']
 
-        product.manufacturer = manufacturer
-        product.name = name
-        product.description = description
-        product.price = price
-        product.category_id = category_id
+        try:
+            product.manufacturer = manufacturer
+            product.name = name
+            product.description = description
+            product.price = price
+            product.category_id = category_id
 
-        db.session.commit()
+            db.session.commit()
 
-        return product_schema.jsonify(product)
+            return product_schema.jsonify(product)
+
+        except:
+            db.session.rollback()
+            return {'msg': 'Ошибка добавления в Базу данных'}
 
     elif request.method == 'DELETE':
-        product = Product.query.get(id)
-        db.session.delete(product)
-        db.session.commit()
+        product = Product.query.get_or_404(id)
+        try:
+            db.session.delete(product)
+            db.session.commit()
 
-        return product_schema.jsonify(product)
+            return product_schema.jsonify(product)
+        except:
+            db.session.rollback()
+            return {'msg': 'Ошибка удаления'}
 
 
-@app.route('/product/<id>/buy', methods=['POST', 'DELETE'])
+@app.route('/product/<id>/buy', methods=['POST'])
 def buy_product(id):
-    if request.method == 'POST':
-        session.permanent = True
-        qty = request.json['qty']
-        buyed_products = []
+    if Product.query.get_or_404(id):
+        if request.method == 'POST':
+            session.permanent = True
+            qty = request.json['qty']
+            buyed_products = []
 
-        if 'buyed_products' not in session:
-            session['buyed_products'] = buyed_products
-            product_in_cart = {id: qty}
-            session['buyed_products'].append(product_in_cart)
-            session.modified = True
-        else:
-            product_in_cart = {id: qty}
-            session['buyed_products'].append(product_in_cart)
-            session.modified = True
-    return {'msg': 'Добавлено в корзину!'}
-
-
-@app.route('/product/cart')
-def products_in_cart():
-    if 'buyed_products' not in session:
-        return {'msg': 'В корзине пока ничего нет!'}
+            if 'buyed_products' not in session:
+                session['buyed_products'] = buyed_products
+                product_in_cart = {id: qty}
+                session['buyed_products'].append(product_in_cart)
+                session.modified = True
+            else:
+                product_in_cart = {id: qty}
+                session['buyed_products'].append(product_in_cart)
+                session.modified = True
+        return {'msg': 'Добавлено в корзину!'}
     else:
-        products = []
-        total = 0
+        return 404
+
+
+@app.route('/product/cart', methods=['GET', 'PUT', 'DELETE'])
+def products_in_cart():
+    if request.method == 'GET':
+        if 'buyed_products' not in session:
+            return {'msg': 'В корзине пока ничего нет!'}
+        else:
+            products = []
+            total = 0
+            for n in session['buyed_products']:
+                for id, qty in n.items():
+                    p = Product.query.get_or_404(id)
+                    product = {'id': id, 'manufacturer': p.manufacturer, 'name': p.name, 'description': p.description,
+                           'price': p.price, 'qty': qty, 'category_id': p.category_id}
+                    products.append(product)
+                    total += p.price * qty
+            totaly = {'total': total}
+            products.append(totaly)
+            return jsonify(products)
+    elif request.method == 'PUT':
+        selected_id = request.json['id']
+        changed_qty = request.json['qty']
         for n in session['buyed_products']:
             for id, qty in n.items():
-                p = Product.query.get(id)
-                product = {'id': id, 'manufacturer': p.manufacturer, 'name': p.name, 'description': p.description,
-                           'price': p.price, 'qty': qty, 'category_id': p.category_id}
-                products.append(product)
-                total += p.price * qty
-        totaly = {'total': total}
-        products.append(totaly)
-        return jsonify(products)
+                if id == selected_id:
+                    new = {selected_id: changed_qty}
+                    n.update(new)
+                    session.modified = True
+        return redirect(url_for('products_in_cart'))
+    elif request.method == 'DELETE':
+        selected_id = request.json['id']
+        for n in session['buyed_products']:
+            for id, qty in n.items():
+                if id == selected_id:
+                    current = {id: qty}
+                    session['buyed_products'].remove(current)
+                    session.modified = True
+        return redirect(url_for('products_in_cart'))
+
+
+
 
 
 @app.route('/product/cart/order', methods=['POST'])
@@ -148,32 +188,47 @@ def order_products_from_cart():
     phone = request.json['phone']
     customer_name = request.json['customer_name']
     second_name = request.json['second_name']
-    adress = request.json['adress']
+    address = request.json['address']
     email = request.json['email']
     delivery_type = request.json['delivery_type']
     pay_type = request.json['pay_type']
 
     if not User.query.filter_by(phone=phone).first():
-        new_info = User(phone=phone, name=customer_name, second_name=second_name, adress=adress, email=email,
+        try:
+            new_info = User(phone=phone, name=customer_name, second_name=second_name, address=address, email=email,
                         delivery_type=delivery_type, pay_type=pay_type, orders=[])
-        db.session.add(new_info)
-        db.session.commit()
+            db.session.add(new_info)
+            db.session.flush()
+            db.session.commit()
+        except:
+            db.session.rollback()
+            return {'msg': 'Ошибка добавления в Базу данных'}
     else:
         pass
-    if session['buyed_products'].__len__() > 0:
-        u = User.query.filter_by(phone=phone).first()
+    if 'buyed_products' in session:
+        u = User.query.filter_by(phone=phone).first_or_404()
         o = Order(user_id=u.id, products=[])
-        db.session.add(o)
-        db.session.commit()
-        order = Order.query.filter_by(user_id=u.id).order_by(Order.id.desc()).first()
+        try:
+            db.session.add(o)
+            db.session.flush()
+            db.session.commit()
+            order = Order.query.filter_by(user_id=u.id).order_by(Order.id.desc()).first_or_404()
+        except:
+            db.session.rollback()
+            return {'msg': 'Ошибка добавления в Базу данных'}
 
         for n in session['buyed_products']:
             for id, qty in n.items():
-                product = Product.query.get(id)
-                op = OrderedProduct(link_id=id, name=product.name, price=product.price, qty=qty, order_id=order.id)
-                db.session.add(op)
-                db.session.commit()
-        session['buyed_products'] = []
+                product = Product.query.get_or_404(id)
+                try:
+                    op = OrderedProduct(link_id=id, name=product.name, price=product.price, qty=qty, order_id=order.id)
+                    db.session.add(op)
+                    db.session.flush()
+                    db.session.commit()
+                except:
+                    db.session.rollback()
+                    return {'msg': 'Ошибка добавления в Базу данных'}
+        session.pop('buyed_products', None)
 
         products_ = []
         total_ = 0
@@ -182,7 +237,12 @@ def order_products_from_cart():
             product = {'id': p.id, 'name': p.name, 'link_id': p.link_id, 'price': p.price, 'qty': p.qty}
             products_.append(product)
         order.total = total_
-        db.session.commit()
+        try:
+            db.session.flush()
+            db.session.commit()
+        except:
+            db.session.rollback()
+            return {'msg': 'Ошибка добавления в Базу данных'}
         order_ = {'order_id': order.id, 'status': order.status, 'user_id': order.user_id, 'date': order.date,
                   'total': order.total}
         products_.insert(0, order_)
@@ -190,40 +250,3 @@ def order_products_from_cart():
 
     else:
         return {'msg': 'Вы не можете сделать пустой заказ!'}
-
-
-'''@app.route('/product/orders')
-def all_orders():
-    all_products = OrderedProduct.query.all()
-
-    return ordered_products_schema.jsonify(all_products)
-
-@app.route('/register', methods=['POST'])
-def register():
-    username = request.json['username']
-    password = generate_password_hash(request.json['password'])
-
-    new_user = User(username=username, password=password)
-
-    db.session.add(new_user)
-    db.session.commit()
-
-    return user_schema.jsonify(new_user)
-
-@app.route('/login', methods=['POST'])
-def login():
-    username = request.json['username']
-    password = request.json['password']
-
-    user = User.query.filter_by(username=username).first()
-    if check_password_hash(user.password, password):
-        login_user(user)
-        return {'msg': 'Вы успешно вошли!'}
-    else:
-        return {'msg': 'Произошла ошибка!'}
-
-@app.route('/logout', methods=['GET', 'POST'])
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('all_products'))'''
