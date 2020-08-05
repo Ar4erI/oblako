@@ -6,6 +6,17 @@ from app import app, db
 from users.models import User
 
 
+def all_info_about_order(order):
+    products = []
+    for p in order.products:
+        product = {'id': p.id, 'name': p.name, 'link_id': p.link_id, 'price': p.price, 'qty': p.qty}
+        products.append(product)
+    order_ = {'order_id': order.id, 'status': order.status, 'user_id': order.user_id, 'date': order.date,
+              'total': order.total}
+    products.insert(0, order_)
+    return products
+
+
 # Routs
 @app.route('/<category>', methods=['GET', 'POST'])
 def product_for_category(category):
@@ -48,78 +59,22 @@ def product_for_category(category):
     return jsonify(result)
 
 
-@app.route('/product', methods=['POST', 'GET'])
+@app.route('/product')
 def all_products():
-    if request.method == 'POST':
-        manufacturer = request.json['manufacturer']
-        name = request.json['name']
-        description = request.json['description']
-        price = request.json['price']
-        category_id = request.json['category_id']
+    all_products = Product.query.all()
+    result = products_schema.dump(all_products)
 
-        try:
-            new_product = Product(manufacturer, name, description, price, category_id)
-
-            db.session.add(new_product)
-            db.session.flush()
-            db.session.commit()
-
-            return product_schema.jsonify(new_product)
-        except:
-            db.session.rollback()
-            return {'msg': 'Ошибка добавления в Базу данных'}
-
-    elif request.method == 'GET':
-        all_products = Product.query.all()
-        result = products_schema.dump(all_products)
-
-        return jsonify(result)
+    return jsonify(result)
 
 
 # Get Single Products
-@app.route('/product/<id>', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/product/<id>')
 def get_product(id):
-    if request.method == 'GET':
-        product = Product.query.get_or_404(id)
-        return product_schema.jsonify(product)
-
-    elif request.method == 'PUT':
-        product = Product.query.get_or_404(id)
-
-        manufacturer = request.json['manufacturer']
-        name = request.json['name']
-        description = request.json['description']
-        price = request.json['price']
-        category_id = request.json['category_id']
-
-        try:
-            product.manufacturer = manufacturer
-            product.name = name
-            product.description = description
-            product.price = price
-            product.category_id = category_id
-
-            db.session.commit()
-
-            return product_schema.jsonify(product)
-
-        except:
-            db.session.rollback()
-            return {'msg': 'Ошибка добавления в Базу данных'}
-
-    elif request.method == 'DELETE':
-        product = Product.query.get_or_404(id)
-        try:
-            db.session.delete(product)
-            db.session.commit()
-
-            return product_schema.jsonify(product)
-        except:
-            db.session.rollback()
-            return {'msg': 'Ошибка удаления'}
+    product = Product.query.get_or_404(id)
+    return product_schema.jsonify(product)
 
 
-@app.route('/product/<id>/buy', methods=['POST'])
+@app.route('/product/<int:id>/buy', methods=['POST'])
 def buy_product(id):
     if Product.query.get_or_404(id):
         if request.method == 'POST':
@@ -180,13 +135,10 @@ def products_in_cart():
         return redirect(url_for('products_in_cart'))
 
 
-
-
-
 @app.route('/product/cart/order', methods=['POST'])
 def order_products_from_cart():
     phone = request.json['phone']
-    customer_name = request.json['customer_name']
+    name = request.json['name']
     second_name = request.json['second_name']
     address = request.json['address']
     email = request.json['email']
@@ -195,7 +147,7 @@ def order_products_from_cart():
 
     if not User.query.filter_by(phone=phone).first():
         try:
-            new_info = User(phone=phone, name=customer_name, second_name=second_name, address=address, email=email,
+            new_info = User(phone=phone, name=name, second_name=second_name, address=address, email=email,
                         delivery_type=delivery_type, pay_type=pay_type, orders=[])
             db.session.add(new_info)
             db.session.flush()
@@ -230,23 +182,18 @@ def order_products_from_cart():
                     return {'msg': 'Ошибка добавления в Базу данных'}
         session.pop('buyed_products', None)
 
-        products_ = []
-        total_ = 0
+        total = 0
         for p in order.products:
-            total_ += p.price * p.qty
-            product = {'id': p.id, 'name': p.name, 'link_id': p.link_id, 'price': p.price, 'qty': p.qty}
-            products_.append(product)
-        order.total = total_
+            total += p.price * p.qty
+        order.total = total
         try:
             db.session.flush()
             db.session.commit()
         except:
             db.session.rollback()
             return {'msg': 'Ошибка добавления в Базу данных'}
-        order_ = {'order_id': order.id, 'status': order.status, 'user_id': order.user_id, 'date': order.date,
-                  'total': order.total}
-        products_.insert(0, order_)
-        return jsonify(products_)
+
+        return jsonify(all_info_about_order(order))
 
     else:
         return {'msg': 'Вы не можете сделать пустой заказ!'}

@@ -1,5 +1,6 @@
-from flask import jsonify, request, redirect, url_for
+from flask import request, redirect, url_for
 from flask_login import login_user, login_required, current_user, logout_user
+from werkzeug.security import check_password_hash
 
 from . import users
 from .models import User, user_schema
@@ -15,11 +16,18 @@ def login():
     phone = request.json['phone']
 
     user = User.query.filter_by(name=name).first_or_404()
-    if user.phone == phone:
-        login_user(user)
-        return {'msg': 'Вы успешно вошли!'}
+    if user.role_id == 2:
+        if check_password_hash(user.second_name, phone):
+            login_user(user)
+            return {'msg': 'Вы успешно вошли!'}
+        else:
+            return {'msg': 'Неверное имя пользователя или номер телефона'}
     else:
-        return {'msg': 'Неверное имя пользователя или номер телефона'}
+        if user.phone == phone:
+            login_user(user)
+            return {'msg': 'Вы успешно вошли!'}
+        else:
+            return {'msg': 'Неверное имя пользователя или номер телефона'}
 
 
 @users.route('/orders')

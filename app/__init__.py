@@ -22,7 +22,9 @@ db = SQLAlchemy(app)
 ma = Marshmallow(app)
 # Blueprints
 from users import users
+from admin import admin
 
 app.register_blueprint(users, url_prefix='/user')
+app.register_blueprint(admin, url_prefix='/admin')
 
 from app import models, urls
