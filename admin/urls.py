@@ -1,11 +1,9 @@
-from flask import request, jsonify, redirect, url_for
+from flask import request, jsonify
 from flask_login import login_required, current_user
 
 from . import admin
 
-from app.models import Product, Category, Order, category_schema, product_schema, orders_schema
-
-from app.urls import all_info_about_order
+from app.models import Product, Category, Order, category_schema, product_schema
 
 from app import db
 
@@ -102,7 +100,7 @@ def all_orders():
         orders_ = []
 
         for order in orders:
-            orders_.append(all_info_about_order(order))
+            orders_.append(order.all_info_about_order())
 
         return jsonify(orders_)
 
@@ -113,7 +111,7 @@ def all_orders():
         orders_ = []
 
         for order in orders:
-            orders_.append(all_info_about_order(order))
+            orders_.append(order.all_info_about_order())
 
         return jsonify(orders_)
 
@@ -124,16 +122,16 @@ def change_order(id):
     order = Order.query.get(id)
     if request.method == 'GET':
 
-        return jsonify(all_info_about_order(order))
+        return jsonify(order.all_info_about_order())
 
     elif request.method == 'PUT':
         status = request.json['status']
         try:
-            order.status=status
+            order.status = status
             db.session.flush()
             db.session.commit()
 
-            return jsonify(all_info_about_order(order))
+            return jsonify(order.all_info_about_order())
         except:
             db.session.rollback()
 
@@ -149,7 +147,7 @@ def change_order(id):
             orders_ = []
 
             for order in orders:
-                orders_.append(all_info_about_order(order))
+                orders_.append(order.all_info_about_order())
 
             return jsonify(orders_)
 

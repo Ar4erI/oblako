@@ -1,13 +1,13 @@
-from flask import request, redirect, url_for
+from flask import request, redirect, url_for, jsonify
 from flask_login import login_user, login_required, current_user, logout_user
 from werkzeug.security import check_password_hash
 
 from . import users
-from .models import User, user_schema
+from .models import User, user_schema, check_phone_in_db
 
 from app import db
 
-from app.models import Order, orders_schema
+from app.models import Order
 
 
 @users.route('/login', methods=['POST'])
@@ -36,21 +36,32 @@ def all_orders():
     user_id = current_user.get_id()
     orders = Order.query.filter_by(user_id=user_id)
 
-    return orders_schema.jsonify(orders)
+    orders_ = []
+
+    for order in orders:
+        orders_.append(order.all_info_about_order())
+
+    return jsonify(orders_)
 
 
 @users.route('/register', methods=['POST'])
 def register():
     phone = request.json['phone']
-    customer_name = request.json['customer_name']
+    name = request.json['name']
     second_name = request.json['second_name']
     address = request.json['address']
     email = request.json['email']
     delivery_type = request.json['delivery_type']
     pay_type = request.json['pay_type']
+    if check_phone_in_db(phone):
+        return jsonify(
+            {'msg': 'Пользователь с таким номером телефона уже существует. Возможно вы уже зарегистрированы так '
+                    'как система автоматически регистрирует пользователя при оформлении заказа.Попробуйте войти.'})
+    else:
+        pass
     try:
-        new_info = User(phone=phone, name=customer_name, second_name=second_name, address=address, email=email,
-                            delivery_type=delivery_type, pay_type=pay_type, orders=[])
+        new_info = User(phone=phone, name=name, second_name=second_name, address=address, email=email,
+                        delivery_type=delivery_type, pay_type=pay_type, orders=[])
         db.session.add(new_info)
         db.session.flush()
         db.session.commit()

@@ -1,20 +1,10 @@
 from flask import request, jsonify, session, redirect, url_for
+from flask_login import login_user, current_user
 
 from app.models import Product, product_schema, products_schema, OrderedProduct, Order
 from app import app, db
 
 from users.models import User
-
-
-def all_info_about_order(order):
-    products = []
-    for p in order.products:
-        product = {'id': p.id, 'name': p.name, 'link_id': p.link_id, 'price': p.price, 'qty': p.qty}
-        products.append(product)
-    order_ = {'order_id': order.id, 'status': order.status, 'user_id': order.user_id, 'date': order.date,
-              'total': order.total}
-    products.insert(0, order_)
-    return products
 
 
 # Routs
@@ -70,8 +60,11 @@ def all_products():
 # Get Single Products
 @app.route('/product/<id>')
 def get_product(id):
-    product = Product.query.get_or_404(id)
-    return product_schema.jsonify(product)
+    if Product.query.get_or_404(id):
+        product = Product.query.get_or_404(id)
+        return product_schema.jsonify(product)
+    else:
+        return 404
 
 
 @app.route('/product/<int:id>/buy', methods=['POST'])
@@ -88,9 +81,24 @@ def buy_product(id):
                 session['buyed_products'].append(product_in_cart)
                 session.modified = True
             else:
-                product_in_cart = {id: qty}
-                session['buyed_products'].append(product_in_cart)
-                session.modified = True
+                ids = []
+                for n in session['buyed_products']:
+                    for id_ in n.keys():
+                        ids.append(int(id_))
+                if id in ids:
+                    for n in session['buyed_products']:
+                        for id_, qty_ in n.items():
+                            if int(id_) == id:
+                                qty_ += qty
+                                new = {id_: qty_}
+                                n.update(new)
+                                session.modified = True
+                            else:
+                                pass
+                else:
+                    product_in_cart = {id: qty}
+                    session['buyed_products'].append(product_in_cart)
+                    session.modified = True
         return {'msg': 'Добавлено в корзину!'}
     else:
         return 404
@@ -108,12 +116,13 @@ def products_in_cart():
                 for id, qty in n.items():
                     p = Product.query.get_or_404(id)
                     product = {'id': id, 'manufacturer': p.manufacturer, 'name': p.name, 'description': p.description,
-                           'price': p.price, 'qty': qty, 'category_id': p.category_id}
+                               'price': p.price, 'qty': qty, 'category_id': p.category_id}
                     products.append(product)
                     total += p.price * qty
             totaly = {'total': total}
             products.append(totaly)
             return jsonify(products)
+
     elif request.method == 'PUT':
         selected_id = request.json['id']
         changed_qty = request.json['qty']
@@ -124,6 +133,7 @@ def products_in_cart():
                     n.update(new)
                     session.modified = True
         return redirect(url_for('products_in_cart'))
+
     elif request.method == 'DELETE':
         selected_id = request.json['id']
         for n in session['buyed_products']:
@@ -131,8 +141,15 @@ def products_in_cart():
                 if id == selected_id:
                     current = {id: qty}
                     session['buyed_products'].remove(current)
+                    if session['buyed_products'].__len__() == 0:
+                        session.pop('buyed_products', None)
                     session.modified = True
         return redirect(url_for('products_in_cart'))
+
+
+@app.route('/cart')
+def get():
+    return jsonify(session['buyed_products'].__len__())
 
 
 @app.route('/product/cart/order', methods=['POST'])
@@ -148,7 +165,7 @@ def order_products_from_cart():
     if not User.query.filter_by(phone=phone).first():
         try:
             new_info = User(phone=phone, name=name, second_name=second_name, address=address, email=email,
-                        delivery_type=delivery_type, pay_type=pay_type, orders=[])
+                            delivery_type=delivery_type, pay_type=pay_type, orders=[])
             db.session.add(new_info)
             db.session.flush()
             db.session.commit()
@@ -157,14 +174,25 @@ def order_products_from_cart():
             return {'msg': 'Ошибка добавления в Базу данных'}
     else:
         pass
-    if 'buyed_products' in session:
-        u = User.query.filter_by(phone=phone).first_or_404()
-        o = Order(user_id=u.id, products=[])
+    if 'buyed_products' not in session:
+        return {'msg': 'Вы не можете сделать пустой заказ!'}
+    else:
+        if current_user.get_id():
+            user = User.query.get(current_user.get_id())
+        else:
+            user = User.query.filter_by(phone=phone).first_or_404()
+            if user.name == name and user.second_name == second_name:
+                login_user(user)
+            else:
+                return {'msg': 'Неверное имя пользователя или номер телефона, так как пользователь с таким номером '
+                               'телефона уже существует!Попробуйте ввести те данные которые использовали при '
+                               'регистрации или войти и изменить ваши данные.'}
+        o = Order(user_id=user.id, products=[])
         try:
             db.session.add(o)
             db.session.flush()
             db.session.commit()
-            order = Order.query.filter_by(user_id=u.id).order_by(Order.id.desc()).first_or_404()
+            order = Order.query.filter_by(user_id=user.id).order_by(Order.id.desc()).first_or_404()
         except:
             db.session.rollback()
             return {'msg': 'Ошибка добавления в Базу данных'}
@@ -193,7 +221,4 @@ def order_products_from_cart():
             db.session.rollback()
             return {'msg': 'Ошибка добавления в Базу данных'}
 
-        return jsonify(all_info_about_order(order))
-
-    else:
-        return {'msg': 'Вы не можете сделать пустой заказ!'}
+        return jsonify(order.all_info_about_order())

@@ -5,7 +5,7 @@ from app import db, ma
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    manufacturer = db.Column(db.String(100))   # Производитель
+    manufacturer = db.Column(db.String(100))  # Производитель
     # availability = db.Column(db.Boolean)   # Наличие
     # photo # Фотография продукта
     name = db.Column(db.String(100), unique=True)
@@ -42,6 +42,16 @@ class Order(db.Model):
     def __init__(self, user_id, products):
         self.user_id = user_id
         self.products = products
+
+    def all_info_about_order(self):
+        products = []
+        for p in self.products:
+            product = {'id': p.id, 'name': p.name, 'link_id': p.link_id, 'price': p.price, 'qty': p.qty}
+            products.append(product)
+        order_ = {'order_id': self.id, 'status': self.status, 'user_id': self.user_id, 'date': self.date,
+                  'total': self.total}
+        products.insert(0, order_)
+        return products
 
 
 class OrderedProduct(db.Model):
