@@ -172,6 +172,17 @@ def order_products_from_cart():
         except:
             db.session.rollback()
             return {'msg': 'Ошибка добавления в Базу данных'}
+    elif User.query.filter_by(phone=phone).first():
+        user = User.query.filter_by(phone=phone).first()
+        user.address = address
+        user.delivery_type = delivery_type
+        user.pay_type = pay_type
+        try:
+            db.session.flush()
+            db.session.commit()
+        except:
+            db.session.rollback()
+            return {'msg': 'Ошибка добавления в Базу данных'}
     else:
         pass
     if 'buyed_products' not in session:
