@@ -21,7 +21,7 @@ def edit_and_check_phone(phone):
         phone = '+' + phone
         return phone
     elif phone[0] == '+' and phone[1] == '3' and phone[2] == '8' and phone[3] == '0' and phone.__len__() == 13:
-        pass
+        return phone
 
 
 class User(db.Model, UserMixin):
@@ -36,7 +36,7 @@ class User(db.Model, UserMixin):
     pay_type = db.Column(db.String(100), nullable=False)
     role_id = db.Column(db.Integer, db.ForeignKey('role.id'), default=1)
 
-    def __init__(self, phone, name, second_name, address, email, delivery_type, pay_type, orders):
+    def __init__(self, phone, name, second_name, address, email, delivery_type, pay_type, orders, role_id=1):
         self.phone = edit_and_check_phone(phone)
         self.name = name
         self.second_name = second_name
@@ -45,6 +45,7 @@ class User(db.Model, UserMixin):
         self.delivery_type = delivery_type
         self.pay_type = pay_type
         self.orders = orders
+        self.role_id = role_id
 
 
 class Role(db.Model):

@@ -1,10 +1,11 @@
 from flask import request, jsonify, session, redirect, url_for
 from flask_login import login_user, current_user
+from werkzeug.security import generate_password_hash
 
-from app.models import Product, product_schema, products_schema, OrderedProduct, Order
+from app.models import Product, Category, product_schema, products_schema, OrderedProduct, Order
 from app import app, db
 
-from users.models import User
+from users.models import User, Role
 
 
 # Routs
@@ -124,32 +125,33 @@ def products_in_cart():
             return jsonify(products)
 
     elif request.method == 'PUT':
-        selected_id = request.json['id']
-        changed_qty = request.json['qty']
-        for n in session['buyed_products']:
-            for id, qty in n.items():
-                if id == selected_id:
-                    new = {selected_id: changed_qty}
-                    n.update(new)
-                    session.modified = True
-        return redirect(url_for('products_in_cart'))
+        if 'buyed_products' not in session:
+            return {'msg': 'В корзине пока ничего нет!'}
+        else:
+            selected_id = request.json['id']
+            changed_qty = request.json['qty']
+            for n in session['buyed_products']:
+                for id, qty in n.items():
+                    if id == selected_id:
+                        new = {selected_id: changed_qty}
+                        n.update(new)
+                        session.modified = True
+            return redirect(url_for('products_in_cart'))
 
     elif request.method == 'DELETE':
-        selected_id = request.json['id']
-        for n in session['buyed_products']:
-            for id, qty in n.items():
-                if id == selected_id:
-                    current = {id: qty}
-                    session['buyed_products'].remove(current)
-                    if session['buyed_products'].__len__() == 0:
-                        session.pop('buyed_products', None)
-                    session.modified = True
-        return redirect(url_for('products_in_cart'))
-
-
-@app.route('/cart')
-def get():
-    return jsonify(session['buyed_products'].__len__())
+        if 'buyed_products' not in session:
+            return {'msg': 'В корзине пока ничего нет!'}
+        else:
+            selected_id = request.json['id']
+            for n in session['buyed_products']:
+                for id, qty in n.items():
+                    if id == selected_id:
+                        current = {id: qty}
+                        session['buyed_products'].remove(current)
+                        if session['buyed_products'].__len__() == 0:
+                            session.pop('buyed_products', None)
+                        session.modified = True
+            return redirect(url_for('products_in_cart'))
 
 
 @app.route('/product/cart/order', methods=['POST'])
@@ -233,3 +235,46 @@ def order_products_from_cart():
             return {'msg': 'Ошибка добавления в Базу данных'}
 
         return jsonify(order.all_info_about_order())
+
+
+@app.route('/create_all_for_db', methods=['POST'])
+def create_db():
+    pswd = request.json['pswd']
+    if pswd == 'super secret key':
+        db.create_all()
+        role1 = Role('Простой смертный', [])
+        role2 = Role('Тупо боженька', [])
+        category = Category('Tabacco', [])
+        db.session.add(category)
+        db.session.add(role1)
+        db.session.add(role2)
+        db.session.commit()
+        product1 = Product(manufacturer='JBR', name='JBR dragon berry',
+                           description='JBR dragon berry (Драконья ягода) 100грамм', price=170, category_id=1)
+        product2 = Product(manufacturer='JBR', name='Табак Jibiar California Sun',
+                           description='Табак Jibiar California Sun (Дыня Лайм Лёд), 100 грамм', price=170,
+                           category_id=1)
+        product3 = Product(manufacturer='Daim', name='Daim Sweet Bitch',
+                           description='Daim Sweet Bitch (Сладкая Сучка), 50 грамм', price=60,
+                           category_id=1)
+        product4 = Product(manufacturer='Daim', name='Daim Ice Blueberry',
+                           description='Табак для кальяна Daim 50 грамм (Ice Blueberry)', price=60,
+                           category_id=1)
+        product5 = Product(manufacturer='Dark Side', name='Dark Side Code Cherry Medium',
+                           description='Dark Side Code Cherry Medium (Дарксайд Вишня) 100грамм', price=460,
+                           category_id=1)
+        product6 = Product(manufacturer='Dark Side', name='Dark Side Space Dessert Medium',
+                           description='Табак для кальяна Dark Side Space Dessert Medium (Спайс Десерт), 100 грамм',
+                           price=460, category_id=1)
+        user = User(phone='0674004659', name='Admin', second_name=generate_password_hash('password'), address='1',
+                    email='1', delivery_type='1', pay_type='1', orders=[], role_id=2)
+        db.session.add(user)
+        db.session.add(product1)
+        db.session.add(product2)
+        db.session.add(product3)
+        db.session.add(product4)
+        db.session.add(product5)
+        db.session.add(product6)
+        db.session.commit()
+
+        return {'msg': 'Успешное заполнение бд для тестов'}
