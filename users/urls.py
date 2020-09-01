@@ -44,7 +44,7 @@ def all_orders():
     return jsonify(orders_)
 
 
-@users.route('/register', methods=['POST', 'GET'])
+@users.route('/register', methods=['POST'])
 def register():
     phone = request.json['phone']
     name = request.json['name']
