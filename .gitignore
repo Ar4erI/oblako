@@ -1,5 +1,6 @@
 *.pyc
+*.sqlite
+*.cfg
 venv/
-db.sqlite
-__pycache__
-.idea
+**/__pycache__/
+.idea/
