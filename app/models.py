@@ -88,7 +88,7 @@ class OrderedProductSchema(ma.Schema):
 
 class CategorySchema(ma.Schema):
     class Meta:
-        fields = ('id', 'name', 'products')
+        fields = ('id', 'name')
 
 
 # Init schema
@@ -99,3 +99,4 @@ orders_schema = OrderSchema(many=True)
 ordered_product_schema = OrderedProductSchema()
 ordered_products_schema = OrderedProductSchema(many=True)
 category_schema = CategorySchema()
+categories_schema = CategorySchema(many=True)

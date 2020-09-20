@@ -2,13 +2,21 @@ from flask import request, jsonify, session, redirect, url_for
 from flask_login import login_user, current_user
 from werkzeug.security import generate_password_hash
 
-from app.models import Product, Category, product_schema, products_schema, OrderedProduct, Order
+from app.models import Product, Category, product_schema, products_schema, OrderedProduct, Order, categories_schema
 from app import app, db
 
 from users.models import User, Role
 
 
 # Routs
+@app.route('/')
+def all_categories():
+    categories = Category.query.all()
+    result = categories_schema.dump(categories)
+
+    return jsonify(result)
+
+
 @app.route('/<category>', methods=['GET', 'POST'])
 def product_for_category(category):
     if request.method == 'GET':
@@ -242,10 +250,14 @@ def create_db():
     pswd = request.json['pswd']
     if pswd == 'super secret key':
         db.create_all()
-        role1 = Role('Простой смертный', [])
-        role2 = Role('Тупо боженька', [])
-        category = Category('Tabacco', [])
-        db.session.add(category)
+        role1 = Role('Admin', [])
+        role2 = Role('Customer', [])
+        category1 = Category('Табак', [])
+        category2 = Category('Кальян', [])
+        category3 = Category('Уголь', [])
+        db.session.add(category1)
+        db.session.add(category2)
+        db.session.add(category3)
         db.session.add(role1)
         db.session.add(role2)
         db.session.commit()
@@ -254,8 +266,8 @@ def create_db():
         product2 = Product(manufacturer='JBR', name='Табак Jibiar California Sun',
                            description='Табак Jibiar California Sun (Дыня Лайм Лёд), 100 грамм', price=170,
                            category_id=1)
-        product3 = Product(manufacturer='Daim', name='Daim Sweet Bitch',
-                           description='Daim Sweet Bitch (Сладкая Сучка), 50 грамм', price=60,
+        product3 = Product(manufacturer='Daim', name='Daim Spiced Peach',
+                           description='Daim Spiced Peach (Пряный Персик), 50 грамм', price=60,
                            category_id=1)
         product4 = Product(manufacturer='Daim', name='Daim Ice Blueberry',
                            description='Табак для кальяна Daim 50 грамм (Ice Blueberry)', price=60,
@@ -268,6 +280,23 @@ def create_db():
                            price=460, category_id=1)
         user = User(phone='0674004659', name='Admin', second_name=generate_password_hash('password'), address='1',
                     email='1', delivery_type='1', pay_type='1', orders=[], role_id=2)
+        product21 = Product(manufacturer='Amy', name='Кальян Amy Delux Unio 006.01 black',
+                            description='Модель кальяна отличается стильным внешним видом, ведь в ней соединены '
+                                        'интересный цвет, сталь и дерево. В комплексе недорогой кальян выглядит очень '
+                                        'эффектно, поэтому его часто выбирают в качестве подарка, или для домашнего '
+                                        'использования и дополнения красивым изделием интерьера.', price=2075, category_id=2)
+        product22 = Product(manufacturer='Dumok', name='Кальян Dumok Hookah(Украина) AL-09 MINOR',
+                            description='Качественный кальян с отличным внешним видом и передачей вкуса!',
+                            price=2070, category_id=2)
+        product31 = Product(manufacturer='Phoenix', name='Уголь Phoenix (Феникс) 1кг 72 кубика',
+                            description='Отличный кокосовый уголь, содержащий натуральные компоненты. Достоинства его в'
+                                        ' том, что он тлеет более одного часа, равномерно прогревая табак и не меняя '
+                                        'его вкус. Соответственно, количество пепла - минимальное', price=100, category_id=3)
+        product32 = Product(manufacturer='Panda', name='Кокосовый уголь Panda (Панда) 1кг 72шт.',
+                            description='Высококачественный кокосовый уголь для кальяна, созданный из скорлупы '
+                                        'кокосового ореха. В упаковке 1 килограмма содержится 72 крупных кубика угля, '
+                                        'которые обеспечат вкусное и дымное курение кальяна без посторонних запахов и '
+                                        'изменения вкуса.', price=125, category_id=3)
         db.session.add(user)
         db.session.add(product1)
         db.session.add(product2)
@@ -275,6 +304,10 @@ def create_db():
         db.session.add(product4)
         db.session.add(product5)
         db.session.add(product6)
+        db.session.add(product21)
+        db.session.add(product22)
+        db.session.add(product31)
+        db.session.add(product32)
         db.session.commit()
 
         return {'msg': 'Успешное заполнение бд для тестов'}

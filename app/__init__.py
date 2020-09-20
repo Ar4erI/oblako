@@ -1,6 +1,7 @@
 import os
 
 from flask import Flask
+from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from flask_login import LoginManager
@@ -8,6 +9,7 @@ from flask_login import LoginManager
 
 # Init app
 app = Flask(__name__)
+CORS(app)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.secret_key = 'f48481f5948f6ced640f5292e92dee0a0db71346'
 app.permanent_session_lifetime
